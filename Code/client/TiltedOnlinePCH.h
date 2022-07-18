@@ -22,6 +22,8 @@
 #error No game matches these build options
 #endif
 
+
+#include <httplib.h>
 #include <windows.h>
 #include <intrin.h>
 #include <cstdint>

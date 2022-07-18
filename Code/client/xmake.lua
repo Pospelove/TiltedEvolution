@@ -61,7 +61,8 @@ target(name)
         "entt",
         "glm",
         "mem",
-        "xbyak")
+        "xbyak",
+        "cpp-httplib")
 
     if has_config("vivox") then
         add_files("Services/Vivox/**.cpp")
