@@ -1,6 +1,6 @@
 
-#include <TiltedReverse/Code/reverse/include/Debug.hpp>
 #include <BranchInfo.h>
+#include <TiltedReverse/Code/reverse/include/Debug.hpp>
 
 #include "TargetConfig.h"
 #include "launcher.h"
@@ -33,10 +33,10 @@ static LaunchContext* g_context = nullptr;
 
 LaunchContext* GetLaunchContext()
 {
-    #if 0
+#if 0
     if (!g_context)
         __debugbreak();
-    #endif
+#endif
     return g_context;
 }
 
@@ -93,6 +93,31 @@ int StartUp(int argc, char** argv)
     loader::InstallPathRouting(LC->gamePath);
     steam::Load(LC->gamePath);
 
+    auto subpaths = {"Data/SKSE/Plugins/SkyrimPlatform.dll", "SkyrimPlatformImpl.dll", "ChakraCore.dll",
+                     "Data/Platform/Plugins/skymp5-client.js"};
+    for (const auto& subpath : subpaths)
+    {
+        const auto path = LC->gamePath / subpath;
+
+        const bool exists = ([&]() {
+            try
+            {
+                return std::filesystem::exists(path);
+            }
+            catch (const std::exception&)
+            {
+                // no permission, treat as not existing
+                return false;
+            }
+        })();
+
+        if (!exists)
+        {
+            static std::wstring error = L"Missing file: " + std::filesystem::path(subpath).wstring();
+            DIE_NOW(error.c_str());
+        }
+    }
+
     if (!LoadProgram(*LC))
         return 3;
 
@@ -136,6 +161,4 @@ void InitClient()
 // (https://github.com/ModOrganizer2/usvfs/blob/f8051c179dee114b7e06c5dab2482977c285d611/src/usvfs_dll/usvfs.cpp#L352)
 // Resume proc
 
-
 // InjectDLLRemoteThread ->SkipInit
-
