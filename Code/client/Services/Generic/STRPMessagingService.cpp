@@ -77,6 +77,14 @@ STRPMessagingService::STRPMessagingService(World& aWorld, entt::dispatcher& aDis
             }
         });
 
+        server.Get("/spdlogInfo", [](const httplib::Request& req, httplib::Response& res) {
+            if (req.headers.find("Message") != req.headers.end())
+            {
+                auto message = req.headers.find("Message")->second;
+                spdlog::info("{}", message);
+            }
+        });
+
         int port = FindMessagingPort();
 
         spdlog::info("STRPMessagingService Listening {}", port);
