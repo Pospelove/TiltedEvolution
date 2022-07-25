@@ -23,6 +23,9 @@ namespace
 std::vector<std::function<void(World&)>> g_tasks;
 std::mutex g_tasksMutex;
 
+std::string g_remoteIdByLocalId = "{}";
+std::mutex g_remoteIdByLocalIdMutex;
+
 std::vector<DWORD> FindProcesses(std::wstring pName)
 {
     std::vector<DWORD> pids;
@@ -91,6 +94,20 @@ STRPMessagingService::STRPMessagingService(World& aWorld, entt::dispatcher& aDis
             }
         });
 
+        // does not return right answer after first request.
+        // needs some requests to warp up.
+        server.Get("/getIdsMap", [](const httplib::Request& req, httplib::Response& res) {
+            {
+                std::lock_guard<std::mutex> lock(g_tasksMutex);
+                g_tasks.push_back([](auto& world) {
+                    // Request update ids map
+                    STRPMessagingService::UpdateIdsMap(world);
+                });
+            }
+            std::lock_guard<std::mutex> lock(g_remoteIdByLocalIdMutex);
+            res.body = g_remoteIdByLocalId;
+        });
+
         int port = FindMessagingPort();
 
         spdlog::info("STRPMessagingService Listening {}", port);
@@ -125,4 +142,29 @@ void STRPMessagingService::ProcessConnect(World& aWorld, const char* aIpAddress,
     World::Get().GetTransport().SetSTRPToken(aStrpToken);
 
     World::Get().GetRunner().Queue([endpoint] { World::Get().GetTransport().Connect(endpoint); });
+}
+
+void STRPMessagingService::UpdateIdsMap(World& aWorld) noexcept
+{
+    std::string jsonBody = "{";
+
+    for (auto [entity, player, formId] : aWorld.view<PlayerComponent, FormIdComponent>().each())
+    {
+        jsonBody += "\"" + std::to_string(formId.Id) + "\": " + std::to_string(player.Id) + ",";
+    };
+
+    // finish json
+    if (jsonBody.size() > 0 && jsonBody.back() == ',')
+    {
+        jsonBody.back() = '}';
+    }
+
+    // fixup json if empty
+    if (jsonBody == "{")
+    {
+        jsonBody += "}";
+    }
+
+    std::lock_guard l(g_remoteIdByLocalIdMutex);
+    g_remoteIdByLocalId = std::move(jsonBody);
 }
