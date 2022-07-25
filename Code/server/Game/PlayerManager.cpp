@@ -6,12 +6,12 @@ PlayerManager::PlayerManager()
     
 }
 
-Player* PlayerManager::Create(ConnectionId_t aConnectionId) noexcept
+Player* PlayerManager::Create(ConnectionId_t aConnectionId, uint32_t aPlayerId) noexcept
 {
     const auto itor = m_players.find(aConnectionId);
     if (itor == std::end(m_players))
     {
-        const auto [insertedItor, inserted] = m_players.emplace(aConnectionId, MakeUnique<Player>(aConnectionId));
+        const auto [insertedItor, inserted] = m_players.emplace(aConnectionId, MakeUnique<Player>(aConnectionId, aPlayerId));
         if (inserted)
         {
             return insertedItor.value().get();

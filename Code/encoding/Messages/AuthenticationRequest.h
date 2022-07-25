@@ -30,7 +30,8 @@ struct AuthenticationRequest final : ClientMessage
             Username == achRhs.Username &&
             WorldSpaceId == achRhs.WorldSpaceId &&
             CellId == achRhs.CellId &&
-            Level == achRhs.Level;
+            Level == achRhs.Level &&
+            STRPToken == achRhs.STRPToken;
     }
 
     uint64_t DiscordId{};
@@ -43,4 +44,5 @@ struct AuthenticationRequest final : ClientMessage
     GameId WorldSpaceId{};
     GameId CellId{};
     uint16_t Level{};
+    String STRPToken{};
 };

@@ -3,7 +3,7 @@
 struct ServerMessage;
 struct Player
 {
-    Player(ConnectionId_t aConnectionId);
+    Player(ConnectionId_t aConnectionId, uint32_t aPlayerId);
     ~Player() noexcept = default;
 
     Player(Player&&) noexcept;

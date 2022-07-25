@@ -26,7 +26,7 @@ struct PlayerManager
     Iterator begin(){return Iterator(std::begin(m_players));}
     Iterator end(){return Iterator(std::end(m_players));}
 
-    Player* Create(ConnectionId_t aConnectionId) noexcept;
+    Player* Create(ConnectionId_t aConnectionId, uint32_t aPlayerId) noexcept;
     void Remove(Player* apPlayer) noexcept;
     Player* GetByConnectionId(ConnectionId_t aConnectionId) noexcept;
     Player const* GetByConnectionId(ConnectionId_t aConnectionId) const noexcept;

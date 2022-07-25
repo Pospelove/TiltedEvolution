@@ -72,8 +72,14 @@ STRPMessagingService::STRPMessagingService(World& aWorld, entt::dispatcher& aDis
             std::lock_guard<std::mutex> lock(g_tasksMutex);
             if (req.headers.find("Together-Server-IP") != req.headers.end())
             {
-                auto ip = req.headers.find("Together-Server-IP")->second;
-                g_tasks.push_back([ip](auto& world) { STRPMessagingService::ProcessConnect(world, ip.c_str()); });
+                if (req.headers.find("Strp-Token") != req.headers.end())
+                {
+                    auto ip = req.headers.find("Together-Server-IP")->second;
+                    auto token = req.headers.find("Strp-Token")->second;
+                    g_tasks.push_back([ip, token](auto& world) {
+                        STRPMessagingService::ProcessConnect(world, ip.c_str(), token.c_str());
+                    });
+                }
             }
         });
 
@@ -108,13 +114,15 @@ void STRPMessagingService::OnUpdate(const UpdateEvent& aEvent) noexcept
     }
 }
 
-void STRPMessagingService::ProcessConnect(World& aWorld, const char* ip) noexcept
+void STRPMessagingService::ProcessConnect(World& aWorld, const char* aIpAddress, const char* aStrpToken) noexcept
 {
-    spdlog::info("STRPMessagingService::ProcessConnect {}", ip);
+    spdlog::info("STRPMessagingService::ProcessConnect IP={} STRPTOKEN={}", aIpAddress, aStrpToken);
 
     const int port = 10578;
 
-    std::string endpoint = ip + std::string(":") + std::to_string(port);
+    std::string endpoint = aIpAddress + std::string(":") + std::to_string(port);
+
+    World::Get().GetTransport().SetSTRPToken(aStrpToken);
 
     World::Get().GetRunner().Queue([endpoint] { World::Get().GetTransport().Connect(endpoint); });
 }

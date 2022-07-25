@@ -35,6 +35,11 @@ struct TransportService : Client
         m_serverPassword = acPassword;
     }
 
+    void SetSTRPToken(const std::string& acToken) noexcept
+    {
+        m_strpToken = acToken;
+    }
+
 protected:
 
     // Event handlers
@@ -49,6 +54,7 @@ private:
     entt::dispatcher& m_dispatcher;
     bool m_connected;
     String m_serverPassword{};
+    String m_strpToken{};
 
     entt::scoped_connection m_updateConnection;
     entt::scoped_connection m_sendServerMessageConnection;

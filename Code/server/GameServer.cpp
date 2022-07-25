@@ -16,10 +16,12 @@
 #include <AdminMessages/ClientAdminMessageFactory.h>
 #include <Messages/AuthenticationResponse.h>
 #include <Messages/ClientMessageFactory.h>
-#include <Messages/NotifyPlayerLeft.h>
 #include <Messages/NotifyPlayerJoined.h>
+#include <Messages/NotifyPlayerLeft.h>
 #include <console/ConsoleRegistry.h>
 
+#define CPPHTTPLIB_OPENSSL_SUPPORT
+#include <httplib.h>
 
 namespace
 {
@@ -28,13 +30,15 @@ Console::Setting uServerPort{"GameServer:uPort", "Which port to host the server 
 Console::Setting bPremiumTickrate{"GameServer:bPremiumMode", "Use premium tick rate", true};
 Console::StringSetting sServerName{"GameServer:sServerName", "Name that shows up in the server list",
                                    "Dedicated Together Server"};
-//Console::StringSetting sAdminPassword{"GameServer:sAdminPassword", "Admin authentication password", ""};
+// Console::StringSetting sAdminPassword{"GameServer:sAdminPassword", "Admin authentication password", ""};
 Console::StringSetting sPassword{"GameServer:sPassword", "Server password", ""};
 
 // Gameplay
 // TODO: to make this easier for users, use game names for difficulty instead of int
 Console::Setting uDifficulty{"Gameplay:uDifficulty", "In game difficulty (0 to 5)", 4u};
-Console::Setting bEnableGreetings{"Gameplay:bEnableGreetings", "Enables NPC greetings (disabled by default since they can be spammy with dialogue sync)", false};
+Console::Setting bEnableGreetings{
+    "Gameplay:bEnableGreetings",
+    "Enables NPC greetings (disabled by default since they can be spammy with dialogue sync)", false};
 Console::Setting bEnablePvp{"Gameplay:bEnablePvp", "Enables pvp", false};
 
 // ModPolicy Stuff
@@ -50,7 +54,7 @@ Console::Command<bool> TogglePremium("TogglePremium", "Toggle the premium mode",
                                      [](Console::ArgStack& aStack) { bPremiumTickrate = aStack.Pop<bool>(); });
 
 Console::Command<bool> TogglePvp("TogglePvp", "Toggle pvp",
-                                     [](Console::ArgStack& aStack) { bEnablePvp = aStack.Pop<bool>(); });
+                                 [](Console::ArgStack& aStack) { bEnablePvp = aStack.Pop<bool>(); });
 
 Console::Command<> ShowVersion("version", "Show the version the server was compiled with",
                                [](Console::ArgStack&) { spdlog::get("ConOut")->info("Server " BUILD_COMMIT); });
@@ -102,7 +106,8 @@ GameServer::GameServer(Console::ConsoleRegistry& aConsole) noexcept
 
     if (uDifficulty.value_as<uint8_t>() > 5)
     {
-        spdlog::warn("Game difficulty is invalid (should be from 0 to 5, current value is {}), setting difficulty to 4 (master).",
+        spdlog::warn("Game difficulty is invalid (should be from 0 to 5, current value is {}), setting difficulty to 4 "
+                     "(master).",
                      uDifficulty.value_as<uint8_t>());
 
         uDifficulty = 4;
@@ -148,7 +153,7 @@ bool GameServer::CheckMoPo()
     if (!bEnableModCheck)
     {
         // TODO: re-enable this warning when mopo has good ui and the line endings problem is fixed
-        //spdlog::warn(kBypassMoPoWarning);
+        // spdlog::warn(kBypassMoPoWarning);
     }
     // Server is not aware of any installed mods.
     else if (!m_pWorld->GetRecordCollection())
@@ -506,10 +511,38 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
     {
         spdlog::info("New player {:x} '{}' tried to connect with client {} - Version mismatch", aConnectionId,
                      remoteAddress, acRequest->Version.c_str());
-        sendKick(RT::kWrongVersion);
-        return;
+        spdlog::info("Version check bypassed. Please, enable checks back for the prod");
+        // sendKick(RT::kWrongVersion);
+        // return;
     }
 #endif
+
+    auto skympServerApiAddr = "localhost:3000";
+    std::string path = "/strpActorIdByToken/";
+    path += acRequest->STRPToken.data();
+
+    httplib::Client client(skympServerApiAddr);
+    httplib::Result result = client.Get(path.data());
+
+    if (!result)
+    {
+        spdlog::info("New player {:x} '{}' tried to connect with STRPToken {} - Failed to GET {}{} with error={}",
+                     aConnectionId, remoteAddress, acRequest->STRPToken.c_str(), skympServerApiAddr, path,
+                     static_cast<int>(result.error()));
+        sendKick(RT::kWrongPassword);
+        return;
+    }
+
+    auto actorId = static_cast<uint32_t>(atoll(result->body.data()));
+
+    if (actorId == 0)
+    {
+        spdlog::info(
+            "New player {:x} '{}' tried to connect with STRPToken {} - Rejected by skymp5-server (returned body='{}')",
+            aConnectionId, remoteAddress, acRequest->STRPToken.c_str(), result->body.data());
+        sendKick(RT::kWrongPassword);
+        return;
+    }
 
     bool skseProblem = !bAllowSKSE && acRequest->SKSEActive;
     bool mo2Problem = !bAllowMO2 && acRequest->MO2Active;
@@ -609,13 +642,15 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
             responseList.ModList.push_back(entry);
         }
 
-        auto* pPlayer = m_pWorld->GetPlayerManager().Create(aConnectionId);
+        auto* pPlayer = m_pWorld->GetPlayerManager().Create(aConnectionId, actorId);
         pPlayer->SetEndpoint(remoteAddress);
         pPlayer->SetDiscordId(acRequest->DiscordId);
         pPlayer->SetUsername(std::move(acRequest->Username));
         pPlayer->SetMods(playerMods);
         pPlayer->SetModIds(playerModsIds);
         pPlayer->SetLevel(acRequest->Level);
+
+        spdlog::info("Took playerId from skymp5-server's actorId={:x}", actorId);
 
         serverResponse.PlayerId = pPlayer->GetId();
 
@@ -659,16 +694,16 @@ void GameServer::HandleAuthenticationRequest(const ConnectionId_t aConnectionId,
 
         m_pWorld->GetDispatcher().trigger(PlayerJoinEvent(pPlayer, acRequest->WorldSpaceId, acRequest->CellId));
     }
-/*
-    else if (acRequest->Token == sAdminPassword.value() && !sAdminPassword.empty())
-    {
-        AdminSessionOpen response;
-        Send(aConnectionId, response);
+    /*
+        else if (acRequest->Token == sAdminPassword.value() && !sAdminPassword.empty())
+        {
+            AdminSessionOpen response;
+            Send(aConnectionId, response);
 
-        m_adminSessions.insert(aConnectionId);
-        spdlog::warn("New admin session for {:x} '{}'", aConnectionId, remoteAddress);
-    }
-*/
+            m_adminSessions.insert(aConnectionId);
+            spdlog::warn("New admin session for {:x} '{}'", aConnectionId, remoteAddress);
+        }
+    */
     else
     {
         spdlog::info("New player {:x} '{}' has a bad password, kicking.", aConnectionId, remoteAddress);

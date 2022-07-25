@@ -12,7 +12,7 @@ struct STRPMessagingService
 
     void OnUpdate(const UpdateEvent&) noexcept;
 
-    static void ProcessConnect(World& aWorld, const char *ip) noexcept;
+    static void ProcessConnect(World& aWorld, const char* aIpAddress, const char* aStrpToken) noexcept;
 
     World& m_world;
 };

@@ -1,14 +1,8 @@
 #include "Player.h"
 #include <GameServer.h>
 
-static uint32_t GenerateId()
-{
-    static std::atomic<uint32_t> s_counter;
-    return s_counter.fetch_add(1);
-}
-
-Player::Player(ConnectionId_t aConnectionId)
-    : m_id(GenerateId())
+Player::Player(ConnectionId_t aConnectionId, uint32_t aPlayerId)
+    : m_id(aPlayerId)
     , m_connectionId(aConnectionId)
 {
     

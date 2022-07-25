@@ -113,6 +113,8 @@ void TransportService::OnConnected()
     request.Token = m_serverPassword;
     m_serverPassword = "";
 
+    request.STRPToken = m_strpToken;
+
     PlayerCharacter* pPlayer = PlayerCharacter::Get();
 
     // null if discord is not active
